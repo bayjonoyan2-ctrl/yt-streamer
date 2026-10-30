@@ -13,7 +13,6 @@ on:
         - Stream
 
 jobs:
-  # JOB 1: DOWNLOAD
   download:
     if: github.event.inputs.action == 'Download'
     runs-on: ubuntu-latest
@@ -23,10 +22,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
       - name: Run Downloader
         run: python download.py
-        
       - name: Upload Video to Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -34,7 +31,6 @@ jobs:
           path: final_video.mp4
           retention-days: 1
 
-  # JOB 2: STREAM
   stream:
     if: github.event.inputs.action == 'Stream'
     runs-on: ubuntu-latest
@@ -45,17 +41,18 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Download Video from Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: huya-video
-          path: .
-          
+      # THIS finds the last successful download and pulls it here
+      - name: Download Video from Previous Run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_ID=$(gh run list --workflow=main.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
+          gh run download $RUN_ID -n huya-video
+
       - name: Run Stream
         env:
           YOUTUBE_STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
