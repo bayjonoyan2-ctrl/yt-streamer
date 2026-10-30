@@ -45,7 +45,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      # THIS finds the last successful download and pulls it here
       - name: Download Video from Previous Run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
