@@ -3,8 +3,6 @@ import time
 import os
 import re
 import sys
-import urllib.request
-import zipfile
 
 # ================= 配置区 =================
 INPUT_FILE = "final_video.mp4"
@@ -30,20 +28,6 @@ CAM_H = 320
 CAM_X = 1550
 CAM_Y = 650
 
-def download_from_artifact():
-    """Downloads the video from GitHub Artifacts if it's not in the folder."""
-    if not os.path.exists(INPUT_FILE):
-        print("Downloading video from GitHub Artifact...")
-        download_url = os.environ.get("VIDEO_ARTIFACT_URL")
-        if download_url:
-            urllib.request.urlretrieve(download_url, "video_artifact.zip")
-            with zipfile.ZipFile("video_artifact.zip", 'r') as zip_ref:
-                zip_ref.extractall(".")
-            print("✅ Video extracted successfully!")
-        else:
-            print("❌ Could not find VIDEO_ARTIFACT_URL environment variable.")
-            sys.exit(1)
-
 def get_duration(filename):
     """Get the total length of the video in seconds."""
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filename]
@@ -54,10 +38,7 @@ def get_duration(filename):
         return 0.0
 
 def stream():
-    # 1. First, download the video from GitHub's servers
-    download_from_artifact()
-    
-    # 2. Get video duration
+    # Get video duration (file is already downloaded by GitHub Actions)
     total_duration = get_duration(INPUT_FILE)
     if total_duration == 0:
         print("❌ Could not read video duration. Check if file exists.")
