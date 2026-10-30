@@ -2,7 +2,7 @@ import subprocess
 import re
 import os
 
-VOD_URL = "https://www.huya.com/video/play/1130757456.html" # Change this to your video link if needed
+VOD_URL = "https://www.huya.com/video/play/1130306382.html" # Change this to your video link if needed
 print("Installing yt-dlp and downloading crawler...")
 
 # Install yt-dlp
