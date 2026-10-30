@@ -59,6 +59,4 @@ jobs:
       - name: Run Stream
         env:
           YOUTUBE_STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
-          # We get the download URL for the artifact automatically
-          VIDEO_ARTIFACT_URL: ${{ steps.download_video.outputs.download-url }} 
         run: python stream.py
