@@ -48,6 +48,15 @@ jobs:
         with:
           python-version: '3.11'
 
+      # NEW STEP: Free up disk space to fit the 9GB video
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+
       - name: Download Video from Previous Run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
