@@ -11,6 +11,10 @@ on:
         options:
         - Download
         - Stream
+      start_offset:
+        description: 'Time to start streaming from (in seconds)'
+        required: false
+        default: '0'
 
 jobs:
   download:
@@ -48,7 +52,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      # NEW STEP: Free up disk space to fit the 9GB video
       - name: Free Disk Space
         run: |
           sudo rm -rf /usr/share/dotnet
@@ -64,7 +67,21 @@ jobs:
           RUN_ID=$(gh run list --workflow=main.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
           gh run download $RUN_ID -n huya-video
 
+      # NEW STEP: Wait if triggered too early
+      - name: Sync Start Time
+        env:
+          START_OFFSET: ${{ github.event.inputs.start_offset }}
+        run: |
+          # If this is a triggered run (not the very first one), we wait ~15 minutes
+          # so it connects exactly when the old stream dies.
+          if [ "$START_OFFSET" != "0" ]; then
+            echo "Triggered run detected. Waiting 15 minutes to connect exactly on time..."
+            sleep 900
+          fi
+
       - name: Run Stream
         env:
           YOUTUBE_STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          START_OFFSET: ${{ github.event.inputs.start_offset }}
         run: python stream.py
