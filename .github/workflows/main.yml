@@ -33,7 +33,7 @@ jobs:
         with:
           name: huya-video
           path: final_video.mp4
-          retention-days: 1
+          retention-days: 3
 
   stream:
     if: github.event.inputs.action == 'Stream'
