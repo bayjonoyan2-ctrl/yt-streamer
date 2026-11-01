@@ -11,6 +11,10 @@ on:
         options:
         - Download
         - Stream
+      video_url:
+        description: 'Paste Huya Video Link Here (Only for Download)'
+        required: false
+        default: 'https://www.huya.com/video/play/'
       start_offset:
         description: 'Time to start streaming from (in seconds)'
         required: false
@@ -24,7 +28,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      # NEW: Install FFmpeg in the download job so the video is fixed
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
         
@@ -35,6 +38,7 @@ jobs:
       - name: Run Downloader
         env:
           PROXY_URL: ${{ secrets.PROXY_URL }}
+          VOD_URL: ${{ github.event.inputs.video_url }}
         run: python download.py
         
       - name: Upload Video to Artifact
