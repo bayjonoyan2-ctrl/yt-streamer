@@ -23,6 +23,11 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
+      
+      # NEW: Install FFmpeg in the download job so the video is fixed
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
