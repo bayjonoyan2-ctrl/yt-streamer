@@ -40,7 +40,6 @@ def trigger_next_workflow(start_offset):
         "X-GitHub-Api-Version": "2022-11-28"
     }
     
-    # We pass the next starting time to the new workflow!
     next_offset = str(int(start_offset + STREAM_LIMIT_SECONDS))
     data = json.dumps({"ref": "main", "inputs": {"action": "Stream", "start_offset": next_offset}}).encode("utf-8")
     
@@ -101,35 +100,30 @@ def stream():
                 h, m, s = match.groups()
                 current_time = int(h)*3600 + int(m)*60 + float(s)
                 
-                # Check for progress
                 if current_time > last_time:
                     last_time = current_time
                     stall_count = 0
                 else:
                     stall_count += 1
 
-                # Trigger next workflow if it's time
                 if not triggered and current_time >= TRIGGER_AT_SECONDS and remaining_video > max_run_time:
                     triggered = True
                     trigger_next_workflow(seek_offset)
 
-            # If it freezes for 50 consecutive lines (network drop), kill it to restart
-            if stall_count > 50:
-                print("\n⚠️ Stream froze (network drop). Restarting chunk...")
+            # INCREASED TO 300 (approx 60 seconds of freeze)
+            if stall_count > 300:
+                print("\n⚠️ Stream froze for a long time (network drop). Restarting chunk...")
                 break
 
         if process.poll() is None:
             process.kill()
         
-        # Calculate how much we successfully streamed
         played_seconds = last_time if last_time > 0 else (time.time() - 0) 
         
-        # If we hit the trigger point, we just exit. The next server takes over.
         if triggered:
             print(f"⏹️ Reached trigger point at {seek_offset + played_seconds:.2f}s. Handing over to next workflow.")
             break
         else:
-            # If it crashed early, we add the played time and restart the loop to try again
             seek_offset += max(1.0, played_seconds - 5.0) 
             print(f"🔄 Stream stopped early. Restarting from {seek_offset:.2f}s...")
             time.sleep(5)
