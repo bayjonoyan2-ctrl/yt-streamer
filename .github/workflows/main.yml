@@ -26,8 +26,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          
       - name: Run Downloader
+        env:
+          PROXY_URL: ${{ secrets.PROXY_URL }}
         run: python download.py
+        
       - name: Upload Video to Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -67,13 +71,10 @@ jobs:
           RUN_ID=$(gh run list --workflow=main.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
           gh run download $RUN_ID -n huya-video
 
-      # NEW STEP: Wait if triggered too early
       - name: Sync Start Time
         env:
           START_OFFSET: ${{ github.event.inputs.start_offset }}
         run: |
-          # If this is a triggered run (not the very first one), we wait ~15 minutes
-          # so it connects exactly when the old stream dies.
           if [ "$START_OFFSET" != "0" ]; then
             echo "Triggered run detected. Waiting 15 minutes to connect exactly on time..."
             sleep 900
