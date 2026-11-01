@@ -13,15 +13,13 @@ YOUTUBE_STREAM_KEY = os.environ.get("YOUTUBE_STREAM_KEY")
 GH_TOKEN = os.environ.get("GH_TOKEN")
 
 if not YOUTUBE_STREAM_KEY or not GH_TOKEN:
-    print("❌ ERROR: Missing YOUTUBE_STREAM_KEY or GH_TOKEN in GitHub Secrets.")
+    print("❌ ERROR: Missing YOUTUBE_STREAM_KEY or GH_TOKEN.")
     sys.exit(1)
 
 RTMP_URL = f"rtmp://a.rtmp.youtube.com/live2/{YOUTUBE_STREAM_KEY}"
 
-# --- Trigger Settings ---
 STREAM_LIMIT_SECONDS = 3 * 3600 + 30 * 60  # 3 hours and 30 minutes
 TRIGGER_AT_SECONDS = 3 * 3600 + 10 * 60    # 3 hours and 10 minutes
-# =========================================
 
 def get_duration(filename):
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filename]
@@ -54,13 +52,13 @@ def trigger_next_workflow(start_offset):
 def stream():
     total_duration = get_duration(INPUT_FILE)
     if total_duration == 0:
-        print("❌ Could not read video duration. Check if file exists.")
+        print("❌ Could not read video duration.")
         return
 
     seek_offset = float(os.environ.get("START_OFFSET", "0.0"))
     
     while seek_offset < total_duration:
-        print(f"\n🚀 Starting stream from: {seek_offset:.2f} seconds (Remaining: {total_duration - seek_offset:.2f}s)")
+        print(f"\n🚀 Starting stream from: {seek_offset:.2f} seconds")
         
         remaining_video = total_duration - seek_offset
         max_run_time = min(STREAM_LIMIT_SECONDS, remaining_video)
@@ -86,6 +84,9 @@ def stream():
 
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         
+        # START TIMER ADDED BACK
+        start_time = time.time()
+        
         triggered = False
         last_time = 0.0
         stall_count = 0
@@ -110,21 +111,22 @@ def stream():
                     triggered = True
                     trigger_next_workflow(seek_offset)
 
-            # INCREASED TO 300 (approx 60 seconds of freeze)
             if stall_count > 300:
-                print("\n⚠️ Stream froze for a long time (network drop). Restarting chunk...")
+                print("\n⚠️ Stream froze (network drop). Restarting...")
                 break
 
         if process.poll() is None:
             process.kill()
         
-        played_seconds = last_time if last_time > 0 else (time.time() - 0) 
+        # FIXED MATH HERE
+        played_seconds = last_time if last_time > 0 else (time.time() - start_time)
         
         if triggered:
-            print(f"⏹️ Reached trigger point at {seek_offset + played_seconds:.2f}s. Handing over to next workflow.")
+            print(f"⏹️ Reached trigger point at {seek_offset + played_seconds:.2f}s. Handing over.")
             break
         else:
-            seek_offset += max(1.0, played_seconds - 5.0) 
+            # Restart exactly where it left off, minus a 2 second buffer
+            seek_offset += max(1.0, played_seconds - 2.0) 
             print(f"🔄 Stream stopped early. Restarting from {seek_offset:.2f}s...")
             time.sleep(5)
             
