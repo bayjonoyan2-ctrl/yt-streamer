@@ -3,14 +3,21 @@ import re
 import os
 import sys
 
-VOD_URL = "https://www.huya.com/video/play/1131138386.html"
+# Grab the URL and Proxy from GitHub Actions environment variables
+VOD_URL = os.environ.get("VOD_URL")
 PROXY_URL = os.environ.get("PROXY_URL")
 
+if not VOD_URL:
+    print("❌ ERROR: VOD_URL is missing.")
+    sys.exit(1)
+    
 if not PROXY_URL:
     print("❌ ERROR: PROXY_URL is missing from GitHub Secrets.")
     sys.exit(1)
 
+print(f"Starting download for: {VOD_URL}")
 print("Installing yt-dlp and downloading crawler...")
+
 subprocess.run(["pip", "install", "-q", "yt-dlp"])
 
 subprocess.run(["wget", "-q", "-O", "huya_crawler", "https://github.com/hatienl0i2612/huya-crawler/releases/latest/download/huya_crawler-linux-amd64"])
@@ -25,7 +32,6 @@ if m3u8_match:
     m3u8_url = m3u8_match.group(1)
     print(f"✅ Found m3u8 link. Starting download via Cloudflare Proxy...")
 
-    # Run download and check the return code
     download_process = subprocess.run([
         "yt-dlp",
         "--add-header", "Referer:https://v.huya.com/",
@@ -33,13 +39,13 @@ if m3u8_match:
         "--extractor-args", f"generic:proxy={PROXY_URL}",
         "-N", "8",
         "-c",
+        "--fixup", "force", # Fixes the broken timestamps
         "--retries", "infinite",
         "--fragment-retries", "infinite",
         "-o", "final_video.mp4",
         m3u8_url
     ])
     
-    # If yt-dlp fails, exit with an error so GitHub knows it failed
     if download_process.returncode != 0:
         print("\n❌ Download failed with errors.")
         sys.exit(1)
