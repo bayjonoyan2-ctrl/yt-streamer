@@ -2,7 +2,7 @@ import subprocess
 import re
 import os
 
-VOD_URL = "https://www.huya.com/video/play/1130888752.html"
+VOD_URL = "https://www.huya.com/video/play/1131138386.html"
 print("Installing yt-dlp and downloading crawler...")
 
 subprocess.run(["pip", "install", "-q", "yt-dlp"])
