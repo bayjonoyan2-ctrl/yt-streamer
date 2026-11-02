@@ -19,7 +19,7 @@ if not YOUTUBE_STREAM_KEY or not GH_TOKEN:
 RTMP_URL = f"rtmp://a.rtmp.youtube.com/live2/{YOUTUBE_STREAM_KEY}"
 
 STREAM_LIMIT_SECONDS = 3 * 3600 + 30 * 60  # 3 hours and 30 minutes
-TRIGGER_AT_SECONDS = 3 * 3600 + 10 * 60    # 3 hours and 10 minutes
+TRIGGER_AT_SECONDS = 3 * 3600              # 3 hours exactly
 
 def get_duration(filename):
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filename]
