@@ -38,7 +38,7 @@ jobs:
           PROXY_URL: ${{ secrets.PROXY_URL }}
           SCHEDULE_HORIZONTAL_HOURS: ${{ github.event.inputs.schedule_horizontal_hours }}
           SCHEDULE_VERTICAL_HOURS: ${{ github.event.inputs.schedule_vertical_hours }}
-        run: python scripts/download.py
+        run: python download.py
 
       - name: Commit schedule files
         run: |
