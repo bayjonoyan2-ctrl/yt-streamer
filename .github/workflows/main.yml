@@ -1,4 +1,4 @@
-name: Huya to YouTube (Dual Stream)
+name: Huya to YouTube (Separated Streams)
 
 on:
   workflow_dispatch: 
@@ -10,28 +10,30 @@ on:
         type: choice
         options:
         - Download
-        - Stream
+        - Stream Horizontal
+        - Stream Vertical
       video_url:
         description: 'Paste Huya Video Link Here'
         required: false
         default: 'https://www.huya.com/video/play/'
       schedule_hours:
         description: 'Start stream in N hours (0 = play now)'
-        required: true
+        required: false
         default: '0'
       start_offset:
         description: 'Resume video from (seconds)'
         required: false
         default: '0'
   schedule:
-    - cron: "*/10 * * * *" # Runs automatically every 10 minutes
+    - cron: "*/10 * * * *"
 
 jobs:
   download:
     if: github.event.inputs.action == 'Download'
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     permissions:
-      contents: write # Allows git push to save the schedule.txt
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Install FFmpeg
@@ -52,8 +54,9 @@ jobs:
           path: final_video.mp4
           retention-days: 3
 
-  stream:
-    if: github.event.inputs.action == 'Stream'
+  # HORIZONTAL STREAM JOB
+  stream_horizontal:
+    if: github.event.inputs.action == 'Stream Horizontal'
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -79,10 +82,44 @@ jobs:
         run: |
           RUN_ID=$(gh run list --workflow=main.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
           gh run download $RUN_ID -n huya-video
-      - name: Run Stream
+      - name: Run Stream Horizontal
         env:
           YOUTUBE_STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
-          YOUTUBE_STREAM_KEY_VERTICAL: ${{ secrets.YOUTUBE_STREAM_KEY_VERTICAL }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          START_OFFSET: ${{ github.event.inputs.start_offset }}
+        run: python stream.py
+
+  # VERTICAL STREAM JOB
+  stream_vertical:
+    if: github.event.inputs.action == 'Stream Vertical'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+      - name: Download Video from Previous Run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_ID=$(gh run list --workflow=main.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
+          gh run download $RUN_ID -n huya-video
+      - name: Run Stream Vertical
+        env:
+          YOUTUBE_STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY_VERTICAL }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           START_OFFSET: ${{ github.event.inputs.start_offset }}
         run: python stream.py
@@ -92,7 +129,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: write
-      contents: write # Allows deleting the schedule.txt file
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Run Scheduler
