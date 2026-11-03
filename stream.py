@@ -6,43 +6,35 @@ import sys
 import urllib.request
 import json
 
-# ================= 配置区 =================
 INPUT_FILE = "final_video.mp4"
-
 YOUTUBE_STREAM_KEY = os.environ.get("YOUTUBE_STREAM_KEY")
+YOUTUBE_STREAM_KEY_VERTICAL = os.environ.get("YOUTUBE_STREAM_KEY_VERTICAL")
 GH_TOKEN = os.environ.get("GH_TOKEN")
 
-if not YOUTUBE_STREAM_KEY or not GH_TOKEN:
-    print("❌ ERROR: Missing YOUTUBE_STREAM_KEY or GH_TOKEN.")
+if not YOUTUBE_STREAM_KEY or not YOUTUBE_STREAM_KEY_VERTICAL or not GH_TOKEN:
+    print("❌ ERROR: Missing stream keys or GH_TOKEN.")
     sys.exit(1)
 
-RTMP_URL = f"rtmp://a.rtmp.youtube.com/live2/{YOUTUBE_STREAM_KEY}"
+# Define both RTMP URLs
+RTMP_URL_LANDSCAPE = f"rtmp://a.rtmp.youtube.com/live2/{YOUTUBE_STREAM_KEY}"
+RTMP_URL_VERTICAL = f"rtmp://a.rtmp.youtube.com/live2/{YOUTUBE_STREAM_KEY_VERTICAL}"
 
-STREAM_LIMIT_SECONDS = 3 * 3600 + 30 * 60  # 3 hours and 30 minutes
-TRIGGER_AT_SECONDS = 3 * 3600              # 3 hours exactly
+STREAM_LIMIT_SECONDS = 3 * 3600 + 30 * 60
+TRIGGER_AT_SECONDS = 3 * 3600
 
 def get_duration(filename):
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filename]
     result = subprocess.run(cmd, capture_output=True, text=True)
-    try:
-        return float(result.stdout.strip())
-    except ValueError:
-        return 0.0
+    try: return float(result.stdout.strip())
+    except ValueError: return 0.0
 
 def trigger_next_workflow(start_offset):
     print(f"\n🚀 Triggering NEXT GitHub Action to resume from {start_offset} seconds...")
     url = "https://api.github.com/repos/bayjonoyan2-ctrl/yt-streamer/actions/workflows/main.yml/dispatches"
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {GH_TOKEN}",
-        "X-GitHub-Api-Version": "2022-11-28"
-    }
-    
+    headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {GH_TOKEN}", "X-GitHub-Api-Version": "2022-11-28"}
     next_offset = str(int(start_offset + STREAM_LIMIT_SECONDS))
     data = json.dumps({"ref": "main", "inputs": {"action": "Stream", "start_offset": next_offset}}).encode("utf-8")
-    
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    
     try:
         with urllib.request.urlopen(req) as response:
             print(f"✅ Next workflow triggered! Status: {response.status}")
@@ -51,42 +43,51 @@ def trigger_next_workflow(start_offset):
 
 def stream():
     total_duration = get_duration(INPUT_FILE)
-    if total_duration == 0:
-        print("❌ Could not read video duration.")
-        return
+    if total_duration == 0: return
 
     seek_offset = float(os.environ.get("START_OFFSET", "0.0"))
     
     while seek_offset < total_duration:
         print(f"\n🚀 Starting stream from: {seek_offset:.2f} seconds")
-        
         remaining_video = total_duration - seek_offset
         max_run_time = min(STREAM_LIMIT_SECONDS, remaining_video)
+
+        # --- REPLACED FILTERS WITH YOUR COORDINATES ---
+        filter_complex = (
+            "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=-0.2:saturation=1.2[bg];"
+            "[0:v]crop=1420:920:0:45,scale=1080:-2[game];"
+            "[0:v]crop=360:320:1550:650,scale=800:-2[cam];"
+            "[bg][cam]overlay=(W-w)/2:150[bg_cam];"
+            "[bg_cam][game]overlay=0:950[out]"
+        )
         
+        # If you want the SRT subtitles, uncomment the lines below and update the .srt filename
+        # filter_complex += f";[out]subtitles=sub_1.srt:force_style='FontName=Arial,FontSize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,Outline=1,Shadow=1,MarginV=20'[final]"
+        # map_video = "[final]"
+        map_video = "[out]"
+
+        # FFmpeg command using 'tee' to send to both Landscape and Vertical
         cmd = [
             "ffmpeg", "-re",
             "-ss", str(seek_offset), 
             "-i", INPUT_FILE,
             "-t", str(max_run_time), 
+            "-filter_complex", filter_complex,
+            "-map", map_video,
+            "-map", "0:a",
             "-c:v", "libx264", 
             "-preset", "ultrafast", 
             "-tune", "zerolatency",
-            "-b:v", "12M", 
-            "-maxrate", "12M", 
-            "-bufsize", "24M",
+            "-b:v", "12M", "-maxrate", "12M", "-bufsize", "24M",
             "-pix_fmt", "yuv420p", 
-            "-c:a", "aac", 
-            "-b:a", "192k", 
-            "-ar", "48000",
-            "-f", "flv", 
-            RTMP_URL
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+            "-f", "tee",
+            # TEE splits the output to both URLs
+            f"[f=flv]{RTMP_URL_LANDSCAPE}|[f=flv]{RTMP_URL_VERTICAL}"
         ]
 
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-        
-        # START TIMER ADDED BACK
         start_time = time.time()
-        
         triggered = False
         last_time = 0.0
         stall_count = 0
@@ -112,24 +113,20 @@ def stream():
                     trigger_next_workflow(seek_offset)
 
             if stall_count > 300:
-                print("\n⚠️ Stream froze (network drop). Restarting...")
+                print("\n⚠️ Stream froze. Restarting...")
                 break
 
-        if process.poll() is None:
-            process.kill()
+        if process.poll() is None: process.kill()
         
-        # FIXED MATH HERE
         played_seconds = last_time if last_time > 0 else (time.time() - start_time)
         
         if triggered:
-            print(f"⏹️ Reached trigger point at {seek_offset + played_seconds:.2f}s. Handing over.")
+            print(f"⏹️ Reached trigger point. Handing over.")
             break
         else:
-            # Restart exactly where it left off, minus a 2 second buffer
             seek_offset += max(1.0, played_seconds - 2.0) 
             print(f"🔄 Stream stopped early. Restarting from {seek_offset:.2f}s...")
             time.sleep(5)
-            
             if seek_offset >= total_duration - 10:
                 print("\n✅ Video completely finished!")
                 break
