@@ -23,6 +23,8 @@ on:
         description: 'Resume video from (seconds)'
         required: false
         default: '0'
+  schedule:
+    - cron: "*/10 * * * *"
 
 jobs:
   download:
@@ -36,22 +38,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          
       - name: Run Downloader
         env:
           PROXY_URL: ${{ secrets.PROXY_URL }}
           VOD_URL: ${{ github.event.inputs.video_url }}
           SCHEDULE_HOURS: ${{ github.event.inputs.schedule_hours }}
         run: python download.py
-        
       - name: Upload Video to Artifact
         uses: actions/upload-artifact@v4
         with:
           name: huya-video
           path: final_video.mp4
           retention-days: 3
-          
-      # Upload the schedule file so the stream job knows when to start
       - name: Upload Schedule File
         if: github.event.inputs.schedule_hours != '0'
         uses: actions/upload-artifact@v4
@@ -73,7 +71,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Free Disk Space
         run: |
           sudo rm -rf /usr/share/dotnet
@@ -81,37 +78,12 @@ jobs:
           sudo rm -rf "/usr/local/share/boost"
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           sudo apt-get clean
-
       - name: Download Video from Previous Run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           RUN_ID=$(gh run list --workflow=main.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
           gh run download $RUN_ID -n huya-video
-          
-      - name: Download Schedule File
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          RUN_ID=$(gh run list --workflow=main.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
-          gh run download $RUN_ID -n schedule
-
-      # WAITING STEP: Checks if schedule.txt exists, and waits until the exact time
-      - name: Wait for Scheduled Time
-        run: |
-          if [ -f "schedule.txt" ]; then
-            SCHEDULE_TIME=$(cat schedule.txt)
-            echo "⏳ Waiting until $SCHEDULE_TIME to start stream..."
-            while [ "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \< "$SCHEDULE_TIME" ]; do
-              sleep 60
-              echo "Still waiting... Current time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            done
-            echo "🚀 Time reached! Starting stream."
-          else
-            echo "No schedule set. Starting stream immediately."
-          fi
-
       - name: Run Stream
         env:
           YOUTUBE_STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
@@ -119,3 +91,22 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           START_OFFSET: ${{ github.event.inputs.start_offset }}
         run: python stream.py
+
+  scheduler:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get Schedule File
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_ID=$(gh run list --workflow=main.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
+          gh run download $RUN_ID -n schedule || echo "No schedule file found."
+      - name: Run Scheduler
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: python scheduler.py
