@@ -33,4 +33,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           REPO: ${{ github.repository }}
           START_OFFSET: ${{ github.event.inputs.start_offset }}
-        run: python scripts/stream_vertical.py
+        run: python stream_vertical.py
