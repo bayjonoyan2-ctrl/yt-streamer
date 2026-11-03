@@ -1,0 +1,56 @@
+name: 1. Download Huya Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: 'Huya Video URL'
+        required: true
+      schedule_horizontal_hours:
+        description: 'Start Horizontal stream in N hours (0 = off)'
+        required: true
+        default: '0'
+      schedule_vertical_hours:
+        description: 'Start Vertical stream in N hours (0 = off)'
+        required: true
+        default: '0'
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Download Video
+        env:
+          VIDEO_URL: ${{ github.event.inputs.video_url }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          SCHEDULE_HORIZONTAL_HOURS: ${{ github.event.inputs.schedule_horizontal_hours }}
+          SCHEDULE_VERTICAL_HOURS: ${{ github.event.inputs.schedule_vertical_hours }}
+        run: python scripts/download.py
+
+      - name: Commit schedule files
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "github-actions"
+          git add schedule_*.txt
+          git commit -m "Update stream schedules" || true
+          git push
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: downloaded-video
+          path: video.mp4
+          retention-days: 3
