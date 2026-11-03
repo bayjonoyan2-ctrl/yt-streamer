@@ -8,19 +8,18 @@ import json
 
 INPUT_FILE = "final_video.mp4"
 YOUTUBE_STREAM_KEY = os.environ.get("YOUTUBE_STREAM_KEY")
-YOUTUBE_STREAM_KEY_VERTICAL = os.environ.get("YOUTUBE_STREAM_KEY_VERTICAL")
 GH_TOKEN = os.environ.get("GH_TOKEN")
 
-if not YOUTUBE_STREAM_KEY or not YOUTUBE_STREAM_KEY_VERTICAL or not GH_TOKEN:
-    print("❌ ERROR: Missing stream keys or GH_TOKEN.")
+if not YOUTUBE_STREAM_KEY or not GH_TOKEN:
     sys.exit(1)
 
-# Define both RTMP URLs
-RTMP_URL_LANDSCAPE = f"rtmp://a.rtmp.youtube.com/live2/{YOUTUBE_STREAM_KEY}"
-RTMP_URL_VERTICAL = f"rtmp://a.rtmp.youtube.com/live2/{YOUTUBE_STREAM_KEY_VERTICAL}"
+RTMP_URL = f"rtmp://a.rtmp.youtube.com/live2/{YOUTUBE_STREAM_KEY}"
 
 STREAM_LIMIT_SECONDS = 3 * 3600 + 30 * 60
 TRIGGER_AT_SECONDS = 3 * 3600
+
+# Check if this is the vertical stream by matching the secret names
+IS_VERTICAL = (YOUTUBE_STREAM_KEY == os.environ.get("YOUTUBE_STREAM_KEY_VERTICAL"))
 
 def get_duration(filename):
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filename]
@@ -29,15 +28,17 @@ def get_duration(filename):
     except ValueError: return 0.0
 
 def trigger_next_workflow(start_offset):
-    print(f"\n🚀 Triggering NEXT GitHub Action to resume from {start_offset} seconds...")
+    print(f"\n🚀 Triggering NEXT workflow to resume from {start_offset}s...")
     url = "https://api.github.com/repos/bayjonoyan2-ctrl/yt-streamer/actions/workflows/main.yml/dispatches"
     headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {GH_TOKEN}", "X-GitHub-Api-Version": "2022-11-28"}
     next_offset = str(int(start_offset + STREAM_LIMIT_SECONDS))
-    data = json.dumps({"ref": "main", "inputs": {"action": "Stream", "start_offset": next_offset}}).encode("utf-8")
+    action_name = "Stream Vertical" if IS_VERTICAL else "Stream Horizontal"
+    
+    data = json.dumps({"ref": "main", "inputs": {"action": action_name, "start_offset": next_offset}}).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req) as response:
-            print(f"✅ Next workflow triggered! Status: {response.status}")
+            print(f"✅ Next {action_name} triggered! Status: {response.status}")
     except Exception as e:
         print(f"❌ Failed to trigger next workflow: {e}")
 
@@ -52,39 +53,35 @@ def stream():
         remaining_video = total_duration - seek_offset
         max_run_time = min(STREAM_LIMIT_SECONDS, remaining_video)
 
-        # --- REPLACED FILTERS WITH YOUR COORDINATES ---
-        filter_complex = (
-            "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=-0.2:saturation=1.2[bg];"
-            "[0:v]crop=1420:920:0:45,scale=1080:-2[game];"
-            "[0:v]crop=360:320:1550:650,scale=800:-2[cam];"
-            "[bg][cam]overlay=(W-w)/2:150[bg_cam];"
-            "[bg_cam][game]overlay=0:950[out]"
-        )
-        
-        # If you want the SRT subtitles, uncomment the lines below and update the .srt filename
-        # filter_complex += f";[out]subtitles=sub_1.srt:force_style='FontName=Arial,FontSize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,Outline=1,Shadow=1,MarginV=20'[final]"
-        # map_video = "[final]"
-        map_video = "[out]"
-
-        # FFmpeg command using 'tee' to send to both Landscape and Vertical
         cmd = [
             "ffmpeg", "-re",
             "-ss", str(seek_offset), 
             "-i", INPUT_FILE,
             "-t", str(max_run_time), 
-            "-filter_complex", filter_complex,
-            "-map", map_video,
-            "-map", "0:a",
             "-c:v", "libx264", 
             "-preset", "ultrafast", 
             "-tune", "zerolatency",
             "-b:v", "12M", "-maxrate", "12M", "-bufsize", "24M",
             "-pix_fmt", "yuv420p", 
             "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
-            "-f", "tee",
-            # TEE splits the output to both URLs
-            f"[f=flv]{RTMP_URL_LANDSCAPE}|[f=flv]{RTMP_URL_VERTICAL}"
+            "-f", "flv", 
+            RTMP_URL
         ]
+
+        # If this is the vertical stream, inject your filter before the RTMP URL
+        if IS_VERTICAL:
+            filter_complex = (
+                "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=-0.2:saturation=1.2[bg];"
+                "[0:v]crop=1420:920:0:45,scale=1080:-2[game];"
+                "[0:v]crop=360:320:1550:650,scale=800:-2[cam];"
+                "[bg][cam]overlay=(W-w)/2:150[bg_cam];"
+                "[bg_cam][game]overlay=0:950[out]"
+            )
+            # Insert the filter into the command
+            cmd.insert(cmd.index("-c:v"), "-filter_complex")
+            cmd.insert(cmd.index("-c:v"), filter_complex)
+            cmd.insert(cmd.index("-c:v"), "-map")
+            cmd.insert(cmd.index("-c:v"), "[out]")
 
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         start_time = time.time()
@@ -117,7 +114,6 @@ def stream():
                 break
 
         if process.poll() is None: process.kill()
-        
         played_seconds = last_time if last_time > 0 else (time.time() - start_time)
         
         if triggered:
