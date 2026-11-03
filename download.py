@@ -12,12 +12,30 @@ if not VOD_URL or not PROXY_URL:
     print("❌ ERROR: Missing VOD_URL or PROXY_URL.")
     sys.exit(1)
 
+# 1. Save the schedule time to a text file
 if SCHEDULE_HOURS > 0:
     start_at = datetime.now(timezone.utc) + timedelta(hours=SCHEDULE_HOURS)
     time_str = start_at.strftime("%Y-%m-%dT%H:%M:%SZ")
     with open("schedule.txt", "w") as f:
         f.write(time_str)
     print(f"⏰ Stream scheduled to start at UTC: {time_str}")
+    
+    # Push the text file to GitHub so the scheduler can see it
+    subprocess.run(["git", "config", "user.name", "GitHub Action"])
+    subprocess.run(["git", "config", "user.email", "action@github.com"])
+    subprocess.run(["git", "add", "schedule.txt"])
+    subprocess.run(["git", "commit", "-m", "Update stream schedule"])
+    subprocess.run(["git", "push"])
+    print("✅ Schedule file committed to repository.")
+else:
+    # If no schedule is set, delete the old schedule file if it exists
+    if os.path.exists("schedule.txt"):
+        os.remove("schedule.txt")
+        subprocess.run(["git", "config", "user.name", "GitHub Action"])
+        subprocess.run(["git", "config", "user.email", "action@github.com"])
+        subprocess.run(["git", "add", "schedule.txt"])
+        subprocess.run(["git", "commit", "-m", "Remove old schedule"])
+        subprocess.run(["git", "push"])
 
 print(f"Starting download for: {VOD_URL}")
 subprocess.run(["pip", "install", "-q", "yt-dlp"])
@@ -26,15 +44,14 @@ subprocess.run(["chmod", "+x", "huya_crawler"])
 
 print("Extracting m3u8 link...")
 result = subprocess.run(['./huya_crawler', '-json', VOD_URL], capture_output=True, text=True)
-output_text = result.stdout + result.stderr
-m3u8_match = re.search(r'(https?://[^\s"\']+\.m3u8[^\s"\']*)', output_text)
+m3u8_match = re.search(r'(https?://[^\s"\']+\.m3u8[^\s"\']*)', result.stdout + result.stderr)
 
 if m3u8_match:
     m3u8_url = m3u8_match.group(1)
     print(f"✅ Found m3u8 link. Starting download...")
     download_process = subprocess.run([
         "yt-dlp", "--add-header", "Referer:https://v.huya.com/",
-        "--add-header", "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "--add-header", "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "--extractor-args", f"generic:proxy={PROXY_URL}",
         "-N", "8", "-c", "--fixup", "force",
         "--retries", "infinite", "--fragment-retries", "infinite",
