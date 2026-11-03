@@ -1,4 +1,4 @@
-name: Huya to YouTube
+name: Huya to YouTube (Dual Stream)
 
 on:
   workflow_dispatch: 
@@ -12,11 +12,15 @@ on:
         - Download
         - Stream
       video_url:
-        description: 'Paste Huya Video Link Here (Only for Download)'
+        description: 'Paste Huya Video Link Here'
         required: false
         default: 'https://www.huya.com/video/play/'
+      schedule_hours:
+        description: 'Auto-Start Stream in X Hours (0 = start immediately)'
+        required: true
+        default: '0'
       start_offset:
-        description: 'Time to start streaming from (in seconds)'
+        description: 'Resume video from (seconds)'
         required: false
         default: '0'
 
@@ -27,10 +31,8 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
-      
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
-        
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -39,6 +41,7 @@ jobs:
         env:
           PROXY_URL: ${{ secrets.PROXY_URL }}
           VOD_URL: ${{ github.event.inputs.video_url }}
+          SCHEDULE_HOURS: ${{ github.event.inputs.schedule_hours }}
         run: python download.py
         
       - name: Upload Video to Artifact
@@ -47,6 +50,14 @@ jobs:
           name: huya-video
           path: final_video.mp4
           retention-days: 3
+          
+      # Upload the schedule file so the stream job knows when to start
+      - name: Upload Schedule File
+        if: github.event.inputs.schedule_hours != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: schedule
+          path: schedule.txt
 
   stream:
     if: github.event.inputs.action == 'Stream'
@@ -57,10 +68,8 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
-      
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -79,10 +88,34 @@ jobs:
         run: |
           RUN_ID=$(gh run list --workflow=main.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
           gh run download $RUN_ID -n huya-video
+          
+      - name: Download Schedule File
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_ID=$(gh run list --workflow=main.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
+          gh run download $RUN_ID -n schedule
+
+      # WAITING STEP: Checks if schedule.txt exists, and waits until the exact time
+      - name: Wait for Scheduled Time
+        run: |
+          if [ -f "schedule.txt" ]; then
+            SCHEDULE_TIME=$(cat schedule.txt)
+            echo "⏳ Waiting until $SCHEDULE_TIME to start stream..."
+            while [ "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \< "$SCHEDULE_TIME" ]; do
+              sleep 60
+              echo "Still waiting... Current time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            done
+            echo "🚀 Time reached! Starting stream."
+          else
+            echo "No schedule set. Starting stream immediately."
+          fi
 
       - name: Run Stream
         env:
           YOUTUBE_STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
+          YOUTUBE_STREAM_KEY_VERTICAL: ${{ secrets.YOUTUBE_STREAM_KEY_VERTICAL }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           START_OFFSET: ${{ github.event.inputs.start_offset }}
         run: python stream.py
