@@ -25,4 +25,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           REPO: ${{ github.repository }}
-        run: python scripts/scheduler.py
+        run: python scheduler.py
