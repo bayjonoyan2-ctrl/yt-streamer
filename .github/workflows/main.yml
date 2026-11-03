@@ -10,29 +10,28 @@ on:
         type: choice
         options:
         - Download
-        - Set Schedule
         - Stream
       video_url:
         description: 'Paste Huya Video Link Here'
         required: false
         default: 'https://www.huya.com/video/play/'
       schedule_hours:
-        description: 'Hours from now to start stream (e.g., 14)'
-        required: false
+        description: 'Start stream in N hours (0 = play now)'
+        required: true
         default: '0'
       start_offset:
         description: 'Resume video from (seconds)'
         required: false
         default: '0'
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/10 * * * *" # Runs automatically every 10 minutes
 
 jobs:
-  # JOB 1: DOWNLOAD VIDEO
   download:
     if: github.event.inputs.action == 'Download'
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    permissions:
+      contents: write # Allows git push to save the schedule.txt
     steps:
       - uses: actions/checkout@v4
       - name: Install FFmpeg
@@ -44,6 +43,7 @@ jobs:
         env:
           PROXY_URL: ${{ secrets.PROXY_URL }}
           VOD_URL: ${{ github.event.inputs.video_url }}
+          SCHEDULE_HOURS: ${{ github.event.inputs.schedule_hours }}
         run: python download.py
       - name: Upload Video to Artifact
         uses: actions/upload-artifact@v4
@@ -51,28 +51,7 @@ jobs:
           name: huya-video
           path: final_video.mp4
           retention-days: 3
-          
-  # JOB 2: SET SCHEDULE ONLY (No Download)
-  set_schedule:
-    if: github.event.inputs.action == 'Set Schedule'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Create Schedule File
-        env:
-          SCHEDULE_HOURS: ${{ github.event.inputs.schedule_hours }}
-        run: |
-          python -c "from datetime import datetime, timedelta, timezone; hours=float('$SCHEDULE_HOURS'); start=datetime.now(timezone.utc)+timedelta(hours=hours); open('schedule.txt','w').write(start.strftime('%Y-%m-%dT%H:%M:%SZ')); print(f'Scheduled for {start.strftime(\"%Y-%m-%dT%H:%M:%SZ\")}')"
-      - name: Upload Schedule File
-        uses: actions/upload-artifact@v4
-        with:
-          name: schedule
-          path: schedule.txt
 
-  # JOB 3: STREAM VIDEO
   stream:
     if: github.event.inputs.action == 'Stream'
     runs-on: ubuntu-latest
@@ -108,21 +87,14 @@ jobs:
           START_OFFSET: ${{ github.event.inputs.start_offset }}
         run: python stream.py
 
-  # JOB 4: BACKGROUND SCHEDULER (Runs automatically)
   scheduler:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     permissions:
       actions: write
-      contents: read
+      contents: write # Allows deleting the schedule.txt file
     steps:
       - uses: actions/checkout@v4
-      - name: Download Schedule File
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          RUN_ID=$(gh run list --workflow=main.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
-          gh run download $RUN_ID -n schedule || echo "No schedule found."
       - name: Run Scheduler
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
