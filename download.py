@@ -12,18 +12,15 @@ if not VOD_URL or not PROXY_URL:
     print("❌ ERROR: Missing VOD_URL or PROXY_URL.")
     sys.exit(1)
 
-# --- SCHEDULER LOGIC ---
 if SCHEDULE_HOURS > 0:
     start_at = datetime.now(timezone.utc) + timedelta(hours=SCHEDULE_HOURS)
     time_str = start_at.strftime("%Y-%m-%dT%H:%M:%SZ")
     with open("schedule.txt", "w") as f:
         f.write(time_str)
     print(f"⏰ Stream scheduled to start at UTC: {time_str}")
-# -----------------------
 
 print(f"Starting download for: {VOD_URL}")
 subprocess.run(["pip", "install", "-q", "yt-dlp"])
-
 subprocess.run(["wget", "-q", "-O", "huya_crawler", "https://github.com/hatienl0i2612/huya-crawler/releases/latest/download/huya_crawler-linux-amd64"])
 subprocess.run(["chmod", "+x", "huya_crawler"])
 
@@ -35,17 +32,14 @@ m3u8_match = re.search(r'(https?://[^\s"\']+\.m3u8[^\s"\']*)', output_text)
 if m3u8_match:
     m3u8_url = m3u8_match.group(1)
     print(f"✅ Found m3u8 link. Starting download...")
-
     download_process = subprocess.run([
-        "yt-dlp",
-        "--add-header", "Referer:https://v.huya.com/",
+        "yt-dlp", "--add-header", "Referer:https://v.huya.com/",
         "--add-header", "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         "--extractor-args", f"generic:proxy={PROXY_URL}",
         "-N", "8", "-c", "--fixup", "force",
         "--retries", "infinite", "--fragment-retries", "infinite",
         "-o", "final_video.mp4", m3u8_url
     ])
-    
     if download_process.returncode != 0:
         sys.exit(1)
     print("\n✅ Download finished!")
