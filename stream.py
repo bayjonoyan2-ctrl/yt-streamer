@@ -9,17 +9,18 @@ import json
 INPUT_FILE = "final_video.mp4"
 YOUTUBE_STREAM_KEY = os.environ.get("YOUTUBE_STREAM_KEY")
 GH_TOKEN = os.environ.get("GH_TOKEN")
+START_OFFSET = os.environ.get("START_OFFSET", "0")
 
-if not YOUTUBE_STREAM_KEY or not GH_TOKEN:
+if not YOUTUBE_STREAM_KEY:
+    print("Missing stream key.")
     sys.exit(1)
 
 RTMP_URL = f"rtmp://a.rtmp.youtube.com/live2/{YOUTUBE_STREAM_KEY}"
-
 STREAM_LIMIT_SECONDS = 3 * 3600 + 30 * 60
 TRIGGER_AT_SECONDS = 3 * 3600
 
-# Check if this is the vertical stream by matching the secret names
-IS_VERTICAL = (YOUTUBE_STREAM_KEY == os.environ.get("YOUTUBE_STREAM_KEY_VERTICAL"))
+# Automatically detect if this is the vertical stream
+IS_VERTICAL = "VERTICAL" in sys.argv or os.environ.get("YOUTUBE_STREAM_KEY_VERTICAL") == YOUTUBE_STREAM_KEY
 
 def get_duration(filename):
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filename]
@@ -28,7 +29,7 @@ def get_duration(filename):
     except ValueError: return 0.0
 
 def trigger_next_workflow(start_offset):
-    print(f"\n🚀 Triggering NEXT workflow to resume from {start_offset}s...")
+    print(f"\n🚀 Triggering NEXT {'Vertical' if IS_VERTICAL else 'Horizontal'} workflow...")
     url = "https://api.github.com/repos/bayjonoyan2-ctrl/yt-streamer/actions/workflows/main.yml/dispatches"
     headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {GH_TOKEN}", "X-GitHub-Api-Version": "2022-11-28"}
     next_offset = str(int(start_offset + STREAM_LIMIT_SECONDS))
@@ -38,18 +39,18 @@ def trigger_next_workflow(start_offset):
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req) as response:
-            print(f"✅ Next {action_name} triggered! Status: {response.status}")
+            print(f"✅ Next workflow triggered! Status: {response.status}")
     except Exception as e:
-        print(f"❌ Failed to trigger next workflow: {e}")
+        print(f"❌ Failed to trigger: {e}")
 
 def stream():
     total_duration = get_duration(INPUT_FILE)
     if total_duration == 0: return
 
-    seek_offset = float(os.environ.get("START_OFFSET", "0.0"))
+    seek_offset = float(START_OFFSET)
     
     while seek_offset < total_duration:
-        print(f"\n🚀 Starting stream from: {seek_offset:.2f} seconds")
+        print(f"\n🚀 Starting {'VERTICAL' if IS_VERTICAL else 'HORIZONTAL'} stream from: {seek_offset:.2f}s")
         remaining_video = total_duration - seek_offset
         max_run_time = min(STREAM_LIMIT_SECONDS, remaining_video)
 
@@ -68,7 +69,6 @@ def stream():
             RTMP_URL
         ]
 
-        # If this is the vertical stream, inject your filter before the RTMP URL
         if IS_VERTICAL:
             filter_complex = (
                 "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=-0.2:saturation=1.2[bg];"
@@ -77,7 +77,6 @@ def stream():
                 "[bg][cam]overlay=(W-w)/2:150[bg_cam];"
                 "[bg_cam][game]overlay=0:950[out]"
             )
-            # Insert the filter into the command
             cmd.insert(cmd.index("-c:v"), "-filter_complex")
             cmd.insert(cmd.index("-c:v"), filter_complex)
             cmd.insert(cmd.index("-c:v"), "-map")
