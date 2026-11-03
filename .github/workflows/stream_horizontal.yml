@@ -1,0 +1,36 @@
+name: 2. Stream Horizontal
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_offset:
+        description: 'Start offset in seconds'
+        required: false
+        default: '0'
+
+jobs:
+  stream:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Download Video
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_ID=$(gh run list --workflow=download.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
+          gh run download $RUN_ID -n downloaded-video
+
+      - name: Stream Horizontal
+        env:
+          YOUTUBE_STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          REPO: ${{ github.repository }}
+          START_OFFSET: ${{ github.event.inputs.start_offset }}
+        run: python scripts/stream_horizontal.py
