@@ -3,23 +3,29 @@ import time
 import os
 import re
 import sys
+import urllib.request
+import json
 
 # ================= 配置区 =================
 INPUT_FILE = "final_video.mp4"
+
 YOUTUBE_STREAM_KEY = os.environ.get("YOUTUBE_STREAM_KEY")
+YOUTUBE_STREAM_KEY_VERTICAL = os.environ.get("YOUTUBE_STREAM_KEY_VERTICAL")
+GH_TOKEN = os.environ.get("GH_TOKEN")
+
+if not YOUTUBE_STREAM_KEY or not GH_TOKEN:
+    print("❌ ERROR: Missing YOUTUBE_STREAM_KEY or GH_TOKEN.")
+    sys.exit(1)
+
 RTMP_URL = f"rtmp://a.rtmp.youtube.com/live2/{YOUTUBE_STREAM_KEY}"
+
+# --- Trigger Settings ---
+STREAM_LIMIT_SECONDS = 3 * 3600 + 30 * 60
+TRIGGER_AT_SECONDS = 3 * 3600
 # =========================================
 
-# --- 你的完美裁剪坐标 ---
-GAME_W = 1420
-GAME_H = 920
-GAME_X = 0
-GAME_Y = 45
-
-CAM_W = 360
-CAM_H = 320
-CAM_X = 1550
-CAM_Y = 650
+# --- Detect if this is the vertical stream ---
+IS_VERTICAL = (YOUTUBE_STREAM_KEY == YOUTUBE_STREAM_KEY_VERTICAL)
 
 def get_duration(filename):
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filename]
@@ -29,47 +35,48 @@ def get_duration(filename):
     except ValueError:
         return 0.0
 
+def trigger_next_workflow(start_offset):
+    print(f"\n🚀 Triggering NEXT {'Vertical' if IS_VERTICAL else 'Horizontal'} workflow...")
+    url = "https://api.github.com/repos/bayjonoyan2-ctrl/yt-streamer/actions/workflows/main.yml/dispatches"
+    headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {GH_TOKEN}", "X-GitHub-Api-Version": "2022-11-28"}
+    
+    next_offset = str(int(start_offset + STREAM_LIMIT_SECONDS))
+    action_name = "Stream Vertical" if IS_VERTICAL else "Stream Horizontal"
+    
+    data = json.dumps({"ref": "main", "inputs": {"action": action_name, "start_offset": next_offset}}).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req) as response:
+            print(f"✅ Next {action_name} triggered! Status: {response.status}")
+    except Exception as e:
+        print(f"❌ Failed to trigger next workflow: {e}")
+
 def stream():
     total_duration = get_duration(INPUT_FILE)
     if total_duration == 0:
+        print("❌ Could not read video duration.")
         return
 
-    seek_offset = 0.0
-    first_run = True
-
+    seek_offset = float(os.environ.get("START_OFFSET", "0.0"))
+    
     while seek_offset < total_duration:
-        print(f"\n🚀 Starting PROFESSIONAL portrait stream from: {seek_offset:.2f} seconds")
+        print(f"\n🚀 Starting {'VERTICAL' if IS_VERTICAL else 'HORIZONTAL'} stream from: {seek_offset:.2f} seconds")
         
-        filter_complex = (
-            # 1. 背景层
-            "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=-0.2:saturation=1.2[bg];"
-            # 2. 游戏层
-            f"[0:v]crop={GAME_W}:{GAME_H}:{GAME_X}:{GAME_Y},scale=1080:-2[game];"
-            # 3. 人脸层
-            f"[0:v]crop={CAM_W}:{CAM_H}:{CAM_X}:{CAM_Y},scale=800:-2[cam];"
-            # 4. 阴影 & 叠加
-            f"color=c=black@0.5:s=800x1000:d=1[shadow_cam];"
-            f"[bg][shadow_cam]overlay=(W-w)/2+15:165[bg_shadow1];"
-            f"[bg_shadow1][cam]overlay=(W-w)/2:150[bg_cam];"
-            f"color=c=black@0.5:s=1080x1000:d=1[shadow_game];"
-            f"[bg_cam][shadow_game]overlay=15:965[bg_shadow2];"
-            f"[bg_shadow2][game]overlay=0:950[out]"
-        )
-
+        remaining_video = total_duration - seek_offset
+        max_run_time = min(STREAM_LIMIT_SECONDS, remaining_video)
+        
+        # Base command for BOTH streams
         cmd = [
             "ffmpeg", "-re",
             "-ss", str(seek_offset), 
             "-i", INPUT_FILE,
-            "-filter_complex", filter_complex,
-            "-map", "[out]",
-            "-map", "0:a",
+            "-t", str(max_run_time), 
             "-c:v", "libx264", 
             "-preset", "ultrafast", 
             "-tune", "zerolatency",
             "-b:v", "12M", 
             "-maxrate", "12M", 
             "-bufsize", "24M",
-            "-g", "120",
             "-pix_fmt", "yuv420p", 
             "-c:a", "aac", 
             "-b:a", "192k", 
@@ -78,18 +85,43 @@ def stream():
             RTMP_URL
         ]
 
-        if not first_run:
-            cmd.insert(-1, "-reconnect")
-            cmd.insert(-1, "1")
-            cmd.insert(-1, "-reconnect_streamed")
-            cmd.insert(-1, "1")
-            cmd.insert(-1, "-reconnect_delay_max")
-            cmd.insert(-1, "5")
+        # If it's vertical, apply the heavy filters AND the performance fixes
+        if IS_VERTICAL:
+            filter_complex = (
+                "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=-0.2:saturation=1.2[bg];"
+                "[0:v]crop=1420:920:0:45,scale=1080:-2[game];"
+                "[0:v]crop=360:320:1550:650,scale=800:-2[cam];"
+                "[bg][cam]overlay=(W-w)/2:150[bg_cam];"
+                "[bg_cam][game]overlay=0:950[out]"
+            )
+            
+            # Inject filter and map
+            cmd.insert(cmd.index("-c:v"), "-filter_complex")
+            cmd.insert(cmd.index("-c:v"), filter_complex)
+            cmd.insert(cmd.index("-c:v"), "-map")
+            cmd.insert(cmd.index("-c:v"), "[out]")
+            
+            # PERFORMANCE FIXES FOR VERTICAL ONLY
+            # Overwrite bitrate to 6M (easier to encode)
+            b_v_idx = cmd.index("-b:v")
+            cmd[b_v_idx + 1] = "6M"
+            maxrate_idx = cmd.index("-maxrate")
+            cmd[maxrate_idx + 1] = "6M"
+            
+            # Change preset to superfast (better compression, keeps CPU alive)
+            preset_idx = cmd.index("-preset")
+            cmd[preset_idx + 1] = "superfast"
+            
+            # Add -g 60 for 2-second keyframes
+            cmd.insert(-5, "-g")
+            cmd.insert(-5, "60")
 
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        
         start_time = time.time()
-        stall_count = 0
+        triggered = False
         last_time = 0.0
+        stall_count = 0
 
         for line in process.stdout:
             if "frame=" in line or "time=" in line:
@@ -100,27 +132,37 @@ def stream():
             if match:
                 h, m, s = match.groups()
                 current_time = int(h)*3600 + int(m)*60 + float(s)
+                
                 if current_time > last_time:
                     last_time = current_time
                     stall_count = 0
                 else:
                     stall_count += 1
 
-            if stall_count > 10:
+                if not triggered and current_time >= TRIGGER_AT_SECONDS and remaining_video > max_run_time:
+                    triggered = True
+                    trigger_next_workflow(seek_offset)
+
+            if stall_count > 300:
                 print("\n⚠️ Stream froze. Restarting...")
                 break
-                
+
         if process.poll() is None:
             process.kill()
         
         played_seconds = last_time if last_time > 0 else (time.time() - start_time)
-        seek_offset += max(0, played_seconds - 2.0)
-        first_run = False
-
-        print(f"⏹️ Stream stopped at {seek_offset:.2f}s. Waiting 5s before resuming...")
-        time.sleep(5) 
-    
-    print("\n✅ Video completely finished!")
+        
+        if triggered:
+            print(f"⏹️ Reached trigger point. Handing over.")
+            break
+        else:
+            seek_offset += max(1.0, played_seconds - 2.0) 
+            print(f"🔄 Stream stopped early. Restarting from {seek_offset:.2f}s...")
+            time.sleep(5)
+            
+            if seek_offset >= total_duration - 10:
+                print("\n✅ Video completely finished!")
+                break
 
 if __name__ == "__main__":
     stream()
