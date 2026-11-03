@@ -102,13 +102,11 @@ def stream():
             cmd.insert(cmd.index("-c:v"), "[out]")
             
             # PERFORMANCE FIXES FOR VERTICAL ONLY
-            # Overwrite bitrate to 6M (easier to encode)
             b_v_idx = cmd.index("-b:v")
             cmd[b_v_idx + 1] = "6M"
             maxrate_idx = cmd.index("-maxrate")
             cmd[maxrate_idx + 1] = "6M"
             
-            # Change preset to superfast (better compression, keeps CPU alive)
             preset_idx = cmd.index("-preset")
             cmd[preset_idx + 1] = "superfast"
             
@@ -139,7 +137,8 @@ def stream():
                 else:
                     stall_count += 1
 
-                if not triggered and current_time >= TRIGGER_AT_SECONDS and remaining_video > max_run_time:
+                # FIXED: Added current_time > 600 to prevent instant double-triggering
+                if not triggered and current_time >= TRIGGER_AT_SECONDS and remaining_video > max_run_time and current_time > 600:
                     triggered = True
                     trigger_next_workflow(seek_offset)
 
