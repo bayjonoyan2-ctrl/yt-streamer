@@ -13,8 +13,6 @@ if not VOD_URL or not PROXY_URL:
     print("❌ Missing VIDEO_URL or PROXY_URL")
     sys.exit(1)
 
-print(f"Downloading from Huya: {VOD_URL}")
-
 # Install tools
 subprocess.run(["pip", "install", "-q", "yt-dlp"])
 subprocess.run(["wget", "-q", "-O", "huya_crawler", "https://github.com/hatienl0i2612/huya-crawler/releases/latest/download/huya_crawler-linux-amd64"])
@@ -47,16 +45,16 @@ if download_process.returncode != 0:
 
 print("✅ Video downloaded successfully.")
 
-# Write schedules
+# Write schedules (starts immediately if 0)
 now = datetime.now(timezone.utc)
 
-if HORIZONTAL_HOURS > 0:
+if HORIZONTAL_HOURS >= 0:
     h_at = now + timedelta(hours=HORIZONTAL_HOURS)
     with open("schedule_horizontal.txt", "w") as f:
         f.write(h_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
     print(f"⏰ Horizontal stream scheduled for: {h_at.isoformat()}")
 
-if VERTICAL_HOURS > 0:
+if VERTICAL_HOURS >= 0:
     v_at = now + timedelta(hours=VERTICAL_HOURS)
     with open("schedule_vertical.txt", "w") as f:
         f.write(v_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
