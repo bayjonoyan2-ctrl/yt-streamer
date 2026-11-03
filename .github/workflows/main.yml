@@ -25,7 +25,7 @@ on:
         required: false
         default: '0'
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/10 * * * *" # The Alarm Clock
 
 jobs:
   download:
@@ -54,7 +54,6 @@ jobs:
           path: final_video.mp4
           retention-days: 3
 
-  # HORIZONTAL STREAM JOB
   stream_horizontal:
     if: github.event.inputs.action == 'Stream Horizontal'
     runs-on: ubuntu-latest
@@ -73,7 +72,6 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           sudo apt-get clean
       - name: Download Video from Previous Run
@@ -89,7 +87,6 @@ jobs:
           START_OFFSET: ${{ github.event.inputs.start_offset }}
         run: python stream.py
 
-  # VERTICAL STREAM JOB
   stream_vertical:
     if: github.event.inputs.action == 'Stream Vertical'
     runs-on: ubuntu-latest
@@ -108,7 +105,6 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           sudo apt-get clean
       - name: Download Video from Previous Run
