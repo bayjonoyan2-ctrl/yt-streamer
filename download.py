@@ -10,9 +10,10 @@ HORIZONTAL_HOURS = float(os.environ.get("SCHEDULE_HORIZONTAL_HOURS", "0") or "0"
 VERTICAL_HOURS = float(os.environ.get("SCHEDULE_VERTICAL_HOURS", "0") or "0")
 
 if not VOD_URL or not PROXY_URL:
+    print("❌ Missing VIDEO_URL or PROXY_URL")
     sys.exit(1)
 
-print("Installing tools...")
+# 1. Download the video (YOUR EXACT WORKING CODE)
 subprocess.run(["pip", "install", "-q", "yt-dlp"])
 subprocess.run(["wget", "-q", "-O", "huya_crawler", "https://github.com/hatienl0i2612/huya-crawler/releases/latest/download/huya_crawler-linux-amd64"])
 subprocess.run(["chmod", "+x", "huya_crawler"])
@@ -21,31 +22,34 @@ result = subprocess.run(['./huya_crawler', '-json', VOD_URL], capture_output=Tru
 m3u8_match = re.search(r'(https?://[^\s"\']+\.m3u8[^\s"\']*)', result.stdout + result.stderr)
 
 if not m3u8_match:
+    print("❌ Could not find m3u8 link.")
     sys.exit(1)
 
 m3u8_url = m3u8_match.group(1)
-print("Starting download (Stable Mode)...")
+print("✅ Found m3u8 link. Starting download...")
 
-# Removed fake timeout/retry flags. Using the stable method that gives real percentages.
+# RESTORED YOUR WORKING FLAGS
 download_process = subprocess.run([
     "yt-dlp", 
     "--add-header", "Referer:https://v.huya.com/",
     "--add-header", "User-Agent:Mozilla/5.0",
     "--extractor-args", f"generic:proxy={PROXY_URL}",
-    "-N", "8",                          
-    "-c",
-    "--retries", "10",
-    "--fragment-retries", "10",
+    "-N", "8", "-c", "--fixup", "force",
+    "--retries", "infinite", "--fragment-retries", "infinite",
     "-o", "video.mp4", m3u8_url
 ])
 
 if download_process.returncode != 0:
-    print("⚠️ Download finished with some skipped fragments.")
+    print("❌ Download failed.")
+    sys.exit(1)
 
-print("Pre-rendering vertical video...")
+print("✅ Video downloaded successfully.")
 
+# 2. PRE-RENDER VERTICAL VIDEO (The new part you wanted)
+print("⏳ Pre-rendering vertical video...")
 GAME_W, GAME_H, GAME_X, GAME_Y = 1420, 920, 0, 45
 CAM_W, CAM_H, CAM_X, CAM_Y = 360, 320, 1550, 650
+
 filter_complex = (
     "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=-0.2:saturation=1.2[bg];"
     f"[0:v]crop={GAME_W}:{GAME_H}:{GAME_X}:{GAME_Y},scale=1080:-2[game];"
@@ -53,7 +57,8 @@ filter_complex = (
     "[bg][cam]overlay=(W-w)/2:150[bg_cam];"
     "[bg_cam][game]overlay=0:950[out]"
 )
-# Added -fflags +genpts to fix the 9-min crash during rendering
+
+# Added -fflags +genpts to fix any broken timestamps during rendering
 subprocess.run([
     "ffmpeg", "-y", "-fflags", "+genpts", "-i", "video.mp4",
     "-filter_complex", filter_complex,
@@ -62,8 +67,9 @@ subprocess.run([
     "-c:a", "aac", "-b:a", "192k",
     "vertical_render.mp4"
 ], check=True)
+print("✅ Vertical video pre-rendered!")
 
-print("Rendering finished. Writing schedules...")
+# 3. Write Schedules
 now = datetime.now(timezone.utc)
 if HORIZONTAL_HOURS >= 0:
     with open("schedule_horizontal.txt", "w") as f:
