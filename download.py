@@ -24,19 +24,19 @@ if not m3u8_match:
     sys.exit(1)
 
 m3u8_url = m3u8_match.group(1)
-print("Starting download...")
+print("Starting download (Anti-Freeze Mode)...")
 
-# REMOVED --fixup force. Added --remux-video mp4 to fix the container safely.
 download_process = subprocess.run([
     "yt-dlp", 
     "--add-header", "Referer:https://v.huya.com/",
     "--add-header", "User-Agent:Mozilla/5.0",
     "--extractor-args", f"generic:proxy={PROXY_URL}",
     "-c", 
-    "--skip-unavailable-fragments", 
-    "--remux-video", "mp4", # This fixes the file safely without crashing
-    "--retries", "infinite", 
+    "--socket-timeout", "15",           # <--- KILLS DEAD CONNECTIONS IN 15 SECONDS
+    "--retries", "infinite",            # <--- INSTANTLY RECONNECTS
     "--fragment-retries", "infinite",
+    "--skip-unavailable-fragments",
+    "--remux-video", "mp4",             # <--- REBUILDS FILE SAFELY AT THE END
     "-o", "video.mp4", m3u8_url
 ])
 
