@@ -24,27 +24,24 @@ if not m3u8_match:
     sys.exit(1)
 
 m3u8_url = m3u8_match.group(1)
-print("Starting download (Smart Skip Mode)...")
+print("Starting download...")
 
-# Added -c (continue) so it resumes if it crashes. Changed retries to 5 so it doesn't hang.
+# THIS IS YOUR ORIGINAL LOGIC. NO remux, NO socket-timeout to break it.
 download_process = subprocess.run([
     "yt-dlp", 
     "--add-header", "Referer:https://v.huya.com/",
     "--add-header", "User-Agent:Mozilla/5.0",
     "--extractor-args", f"generic:proxy={PROXY_URL}",
     "-N", "8",                          
-    "-c",                               # <--- RESUMES FROM CRASH
-    "--socket-timeout", "15",           
-    "--retries", "5",                   
-    "--fragment-retries", "5",          
-    "--skip-unavailable-fragments",     
-    "--remux-video", "mp4",             
+    "-c",                               # Resumes if it drops
+    "--fixup", "force",                 # Repairs broken chunks
+    "--retries", "10",                  # Gives up after 10 tries to avoid infinite hang
+    "--fragment-retries", "10",
     "-o", "video.mp4", m3u8_url
 ])
 
 if download_process.returncode != 0:
     print("⚠️ Download finished with some skipped fragments.")
-    # We do NOT exit here. We let it render what it has.
 
 print("Pre-rendering vertical video...")
 
