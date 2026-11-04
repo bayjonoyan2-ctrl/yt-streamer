@@ -24,27 +24,28 @@ if not m3u8_match:
     sys.exit(1)
 
 m3u8_url = m3u8_match.group(1)
-print("Starting download (Fast Mode)...")
+print("Starting download (Smart Skip Mode)...")
 
 download_process = subprocess.run([
     "yt-dlp", 
     "--add-header", "Referer:https://v.huya.com/",
     "--add-header", "User-Agent:Mozilla/5.0",
     "--extractor-args", f"generic:proxy={PROXY_URL}",
-    "-N", "8",                          # <--- BRINGS BACK THE 5MB/s SPEED
+    "-N", "8",                          
     "-c", 
     "--socket-timeout", "15",           
-    "--retries", "infinite",            
-    "--fragment-retries", "infinite",
-    "--skip-unavailable-fragments",
+    "--retries", "5",                   # ONLY TRY 5 TIMES
+    "--fragment-retries", "5",          # ONLY TRY 5 TIMES PER FRAGMENT
+    "--skip-unavailable-fragments",     # SKIP THE BROKEN PIECE
     "--remux-video", "mp4",             
     "-o", "video.mp4", m3u8_url
 ])
 
 if download_process.returncode != 0:
-    sys.exit(1)
+    print("⚠️ Download finished with some skipped fragments.")
+    # We do NOT exit here. We let it render what it has.
 
-print("Download finished! Pre-rendering vertical video...")
+print("Pre-rendering vertical video...")
 
 GAME_W, GAME_H, GAME_X, GAME_Y = 1420, 920, 0, 45
 CAM_W, CAM_H, CAM_X, CAM_Y = 360, 320, 1550, 650
