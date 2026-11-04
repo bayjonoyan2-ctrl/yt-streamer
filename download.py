@@ -24,20 +24,18 @@ if not m3u8_match:
     sys.exit(1)
 
 m3u8_url = m3u8_match.group(1)
-print("Starting download (Anti-Freeze Mode)...")
+print("Starting download (Fast Skip Mode)...")
 
-# Using --socket-timeout to kill dead connections instantly
 download_process = subprocess.run([
     "yt-dlp", 
     "--add-header", "Referer:https://v.huya.com/",
     "--add-header", "User-Agent:Mozilla/5.0",
     "--extractor-args", f"generic:proxy={PROXY_URL}",
     "-N", "8",                          
-    "-c",                               
-    "--socket-timeout", "15",           # Forces dead connections to drop
-    "--retries", "10",                  
+    "--socket-timeout", "5",            # Kills dead connection instantly
+    "--retries", "10",                  # Tries 10 times before giving up
     "--fragment-retries", "10",
-    "--skip-unavailable-fragments",     # Skips the missing piece
+    "--skip-unavailable-fragments",     # Skips the broken piece completely
     "-o", "video.mp4", m3u8_url
 ])
 
@@ -55,7 +53,7 @@ filter_complex = (
     "[bg][cam]overlay=(W-w)/2:150[bg_cam];"
     "[bg_cam][game]overlay=0:950[out]"
 )
-# Added -fflags +genpts to fix the 2-second missing frag jump and prevent stream crash
+# ffmpeg will stitch the missing part seamlessly without crashing the stream
 subprocess.run([
     "ffmpeg", "-y", "-fflags", "+genpts", "-i", "video.mp4",
     "-filter_complex", filter_complex,
