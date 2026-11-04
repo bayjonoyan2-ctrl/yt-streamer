@@ -13,7 +13,7 @@ if not VOD_URL or not PROXY_URL:
     print("❌ Missing VIDEO_URL or PROXY_URL")
     sys.exit(1)
 
-# 1. Download
+# 1. Download the video (YOUR EXACT WORKING CODE)
 subprocess.run(["pip", "install", "-q", "yt-dlp"])
 subprocess.run(["wget", "-q", "-O", "huya_crawler", "https://github.com/hatienl0i2612/huya-crawler/releases/latest/download/huya_crawler-linux-amd64"])
 subprocess.run(["chmod", "+x", "huya_crawler"])
@@ -28,40 +28,28 @@ if not m3u8_match:
 m3u8_url = m3u8_match.group(1)
 print("✅ Found m3u8 link. Starting download...")
 
+# RESTORED YOUR WORKING FLAGS
 download_process = subprocess.run([
     "yt-dlp", 
     "--add-header", "Referer:https://v.huya.com/",
     "--add-header", "User-Agent:Mozilla/5.0",
     "--extractor-args", f"generic:proxy={PROXY_URL}",
-    "-N", "8", "-c",
-    "--abort-on-error",                 
-    "--skip-unavailable-fragments",     
-    "--retries", "1",                   
-    "--fragment-retries", "1",
+    "-N", "8", "-c", "--fixup", "force",
+    "--retries", "infinite", "--fragment-retries", "infinite",
     "-o", "video.mp4", m3u8_url
 ])
 
-print("⚠️ Download finished (some fragments may be missing).")
-
-# --- SAFETY CHECK: VERIFY VIDEO DURATION ---
-print("Checking video duration...")
-probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", "video.mp4"], capture_output=True, text=True)
-try:
-    duration = float(probe.stdout.strip())
-except ValueError:
-    duration = 0.0
-
-print(f"Downloaded video duration: {duration:.0f} seconds.")
-
-if duration < 1800: # Less than 30 minutes
-    print("❌ ERROR: The downloaded video is too short. Huya blocked the download.")
+if download_process.returncode != 0:
+    print("❌ Download failed.")
     sys.exit(1)
 
-# 2. PRE-RENDER VERTICAL VIDEO
-print("Pre-rendering vertical video...")
+print("✅ Video downloaded successfully.")
 
+# 2. PRE-RENDER VERTICAL VIDEO (FAST MODE)
+print("⏳ Pre-rendering vertical video (Fast Mode)...")
 GAME_W, GAME_H, GAME_X, GAME_Y = 1420, 920, 0, 45
 CAM_W, CAM_H, CAM_X, CAM_Y = 360, 320, 1550, 650
+
 filter_complex = (
     "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=-0.2:saturation=1.2[bg];"
     f"[0:v]crop={GAME_W}:{GAME_H}:{GAME_X}:{GAME_Y},scale=1080:-2[game];"
@@ -70,14 +58,15 @@ filter_complex = (
     "[bg_cam][game]overlay=0:950[out]"
 )
 
+# FASTER SETTINGS FOR VERTICAL ONLY
 subprocess.run([
     "ffmpeg", "-y", "-fflags", "+genpts", "-i", "video.mp4",
     "-filter_complex", filter_complex,
     "-map", "[out]", "-map", "0:a",
     "-c:v", "libx264", 
-    "-preset", "veryfast",     
-    "-b:v", "4M", "-maxrate", "4M", "-bufsize", "8M", 
-    "-threads", "4",           
+    "-preset", "veryfast",     # Faster CPU encoding
+    "-b:v", "4M", "-maxrate", "4M", "-bufsize", "8M", # Lower bitrate
+    "-threads", "4",           # Force 4 CPU threads
     "-c:a", "aac", "-b:a", "192k",
     "vertical_render.mp4"
 ], check=True)
