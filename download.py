@@ -24,19 +24,20 @@ if not m3u8_match:
     sys.exit(1)
 
 m3u8_url = m3u8_match.group(1)
-print("Starting download (Anti-Freeze Mode)...")
+print("Starting download (Fast Mode)...")
 
 download_process = subprocess.run([
     "yt-dlp", 
     "--add-header", "Referer:https://v.huya.com/",
     "--add-header", "User-Agent:Mozilla/5.0",
     "--extractor-args", f"generic:proxy={PROXY_URL}",
+    "-N", "8",                          # <--- BRINGS BACK THE 5MB/s SPEED
     "-c", 
-    "--socket-timeout", "15",           # <--- KILLS DEAD CONNECTIONS IN 15 SECONDS
-    "--retries", "infinite",            # <--- INSTANTLY RECONNECTS
+    "--socket-timeout", "15",           
+    "--retries", "infinite",            
     "--fragment-retries", "infinite",
     "--skip-unavailable-fragments",
-    "--remux-video", "mp4",             # <--- REBUILDS FILE SAFELY AT THE END
+    "--remux-video", "mp4",             
     "-o", "video.mp4", m3u8_url
 ])
 
