@@ -26,6 +26,7 @@ if not m3u8_match:
 m3u8_url = m3u8_match.group(1)
 print("Starting download (Anti-Freeze Mode)...")
 
+# Using --socket-timeout to kill dead connections instantly
 download_process = subprocess.run([
     "yt-dlp", 
     "--add-header", "Referer:https://v.huya.com/",
@@ -33,10 +34,10 @@ download_process = subprocess.run([
     "--extractor-args", f"generic:proxy={PROXY_URL}",
     "-N", "8",                          
     "-c",                               
-    "--no-part",                        # <--- PREVENTS TEMP FILE LOCKS
+    "--socket-timeout", "15",           # Forces dead connections to drop
     "--retries", "10",                  
     "--fragment-retries", "10",
-    "--skip-unavailable-fragments",     
+    "--skip-unavailable-fragments",     # Skips the missing piece
     "-o", "video.mp4", m3u8_url
 ])
 
@@ -54,7 +55,7 @@ filter_complex = (
     "[bg][cam]overlay=(W-w)/2:150[bg_cam];"
     "[bg_cam][game]overlay=0:950[out]"
 )
-# Added -fflags +genpts to fix timestamps during rendering (fixes the 9-min crash)
+# Added -fflags +genpts to fix the 2-second missing frag jump and prevent stream crash
 subprocess.run([
     "ffmpeg", "-y", "-fflags", "+genpts", "-i", "video.mp4",
     "-filter_complex", filter_complex,
