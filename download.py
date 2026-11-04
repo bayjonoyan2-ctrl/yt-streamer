@@ -12,8 +12,9 @@ VERTICAL_HOURS = float(os.environ.get("SCHEDULE_VERTICAL_HOURS", "0") or "0")
 if not VOD_URL or not PROXY_URL:
     sys.exit(1)
 
-# 1. Download the video
+print("Installing tools...")
 subprocess.run(["pip", "install", "-q", "yt-dlp"])
+subprocess.run(["sudo", "apt-get", "install", "-y", "aria2"]) # Install aria2
 subprocess.run(["wget", "-q", "-O", "huya_crawler", "https://github.com/hatienl0i2612/huya-crawler/releases/latest/download/huya_crawler-linux-amd64"])
 subprocess.run(["chmod", "+x", "huya_crawler"])
 
@@ -24,23 +25,29 @@ if not m3u8_match:
     sys.exit(1)
 
 m3u8_url = m3u8_match.group(1)
+print("Starting download with aria2c...")
+
 download_process = subprocess.run([
-    "yt-dlp", "--add-header", "Referer:https://v.huya.com/",
+    "yt-dlp", 
+    "--add-header", "Referer:https://v.huya.com/",
     "--add-header", "User-Agent:Mozilla/5.0",
     "--extractor-args", f"generic:proxy={PROXY_URL}",
-    "-N", "8", "-c", "--fixup", "force",
-    "--retries", "infinite", "--fragment-retries", "infinite",
+    "--downloader", "aria2c",                 # Use aria2c to prevent freezing
+    "--downloader-args", "aria2c:-x 16 -s 16 -k 1M --console-log-level=warn", 
+    "-c", "--fixup", "force",                 # Keep the fixup for safety
+    "--retries", "infinite", 
+    "--fragment-retries", "infinite",
     "-o", "video.mp4", m3u8_url
 ])
 
 if download_process.returncode != 0:
     sys.exit(1)
 
-# 2. PRE-RENDER VERTICAL VIDEO
-print("⏳ Pre-rendering vertical video...")
+print("Download finished! Pre-rendering vertical video...")
+
+# PRE-RENDER VERTICAL
 GAME_W, GAME_H, GAME_X, GAME_Y = 1420, 920, 0, 45
 CAM_W, CAM_H, CAM_X, CAM_Y = 360, 320, 1550, 650
-
 filter_complex = (
     "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=-0.2:saturation=1.2[bg];"
     f"[0:v]crop={GAME_W}:{GAME_H}:{GAME_X}:{GAME_Y},scale=1080:-2[game];"
@@ -48,7 +55,6 @@ filter_complex = (
     "[bg][cam]overlay=(W-w)/2:150[bg_cam];"
     "[bg_cam][game]overlay=0:950[out]"
 )
-
 subprocess.run([
     "ffmpeg", "-y", "-i", "video.mp4",
     "-filter_complex", filter_complex,
@@ -57,9 +63,8 @@ subprocess.run([
     "-c:a", "aac", "-b:a", "192k",
     "vertical_render.mp4"
 ], check=True)
-print("✅ Vertical video pre-rendered!")
 
-# 3. Write Schedules
+print("Rendering finished. Writing schedules...")
 now = datetime.now(timezone.utc)
 if HORIZONTAL_HOURS >= 0:
     with open("schedule_horizontal.txt", "w") as f:
