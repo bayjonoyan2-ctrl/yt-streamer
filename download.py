@@ -26,14 +26,15 @@ if not m3u8_match:
 m3u8_url = m3u8_match.group(1)
 print("Starting download...")
 
+# REMOVED --fixup force. Added --remux-video mp4 to fix the container safely.
 download_process = subprocess.run([
     "yt-dlp", 
     "--add-header", "Referer:https://v.huya.com/",
     "--add-header", "User-Agent:Mozilla/5.0",
     "--extractor-args", f"generic:proxy={PROXY_URL}",
     "-c", 
-    "--skip-unavailable-fragments", # THIS BYPASSES THE 95% FREEZE
-    "--fixup", "force",
+    "--skip-unavailable-fragments", 
+    "--remux-video", "mp4", # This fixes the file safely without crashing
     "--retries", "infinite", 
     "--fragment-retries", "infinite",
     "-o", "video.mp4", m3u8_url
