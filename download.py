@@ -24,19 +24,19 @@ if not m3u8_match:
     sys.exit(1)
 
 m3u8_url = m3u8_match.group(1)
-print("Starting download...")
+print("Starting download (Anti-Freeze Mode)...")
 
-# THIS IS YOUR ORIGINAL LOGIC. NO remux, NO socket-timeout to break it.
 download_process = subprocess.run([
     "yt-dlp", 
     "--add-header", "Referer:https://v.huya.com/",
     "--add-header", "User-Agent:Mozilla/5.0",
     "--extractor-args", f"generic:proxy={PROXY_URL}",
     "-N", "8",                          
-    "-c",                               # Resumes if it drops
-    "--fixup", "force",                 # Repairs broken chunks
-    "--retries", "10",                  # Gives up after 10 tries to avoid infinite hang
+    "-c",                               
+    "--no-part",                        # <--- PREVENTS TEMP FILE LOCKS
+    "--retries", "10",                  
     "--fragment-retries", "10",
+    "--skip-unavailable-fragments",     
     "-o", "video.mp4", m3u8_url
 ])
 
@@ -54,8 +54,9 @@ filter_complex = (
     "[bg][cam]overlay=(W-w)/2:150[bg_cam];"
     "[bg_cam][game]overlay=0:950[out]"
 )
+# Added -fflags +genpts to fix timestamps during rendering (fixes the 9-min crash)
 subprocess.run([
-    "ffmpeg", "-y", "-i", "video.mp4",
+    "ffmpeg", "-y", "-fflags", "+genpts", "-i", "video.mp4",
     "-filter_complex", filter_complex,
     "-map", "[out]", "-map", "0:a",
     "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "6M", "-maxrate", "6M", "-bufsize", "12M",
