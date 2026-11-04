@@ -1,9 +1,5 @@
 name: 1. Download Huya Video
 
-concurrency:
-  group: download-${{ github.ref }}
-  cancel-in-progress: true
-
 on:
   workflow_dispatch:
     inputs:
