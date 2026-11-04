@@ -24,18 +24,18 @@ if not m3u8_match:
     sys.exit(1)
 
 m3u8_url = m3u8_match.group(1)
-print("Starting download (Fast Skip Mode)...")
+print("Starting download (Stable Mode)...")
 
+# Removed fake timeout/retry flags. Using the stable method that gives real percentages.
 download_process = subprocess.run([
     "yt-dlp", 
     "--add-header", "Referer:https://v.huya.com/",
     "--add-header", "User-Agent:Mozilla/5.0",
     "--extractor-args", f"generic:proxy={PROXY_URL}",
     "-N", "8",                          
-    "--socket-timeout", "5",            # Kills dead connection instantly
-    "--retries", "10",                  # Tries 10 times before giving up
+    "-c",
+    "--retries", "10",
     "--fragment-retries", "10",
-    "--skip-unavailable-fragments",     # Skips the broken piece completely
     "-o", "video.mp4", m3u8_url
 ])
 
@@ -53,7 +53,7 @@ filter_complex = (
     "[bg][cam]overlay=(W-w)/2:150[bg_cam];"
     "[bg_cam][game]overlay=0:950[out]"
 )
-# ffmpeg will stitch the missing part seamlessly without crashing the stream
+# Added -fflags +genpts to fix the 9-min crash during rendering
 subprocess.run([
     "ffmpeg", "-y", "-fflags", "+genpts", "-i", "video.mp4",
     "-filter_complex", filter_complex,
