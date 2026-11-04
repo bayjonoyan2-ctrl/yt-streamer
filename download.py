@@ -26,17 +26,18 @@ if not m3u8_match:
 m3u8_url = m3u8_match.group(1)
 print("Starting download (Smart Skip Mode)...")
 
+# Added -c (continue) so it resumes if it crashes. Changed retries to 5 so it doesn't hang.
 download_process = subprocess.run([
     "yt-dlp", 
     "--add-header", "Referer:https://v.huya.com/",
     "--add-header", "User-Agent:Mozilla/5.0",
     "--extractor-args", f"generic:proxy={PROXY_URL}",
     "-N", "8",                          
-    "-c", 
+    "-c",                               # <--- RESUMES FROM CRASH
     "--socket-timeout", "15",           
-    "--retries", "5",                   # ONLY TRY 5 TIMES
-    "--fragment-retries", "5",          # ONLY TRY 5 TIMES PER FRAGMENT
-    "--skip-unavailable-fragments",     # SKIP THE BROKEN PIECE
+    "--retries", "5",                   
+    "--fragment-retries", "5",          
+    "--skip-unavailable-fragments",     
     "--remux-video", "mp4",             
     "-o", "video.mp4", m3u8_url
 ])
