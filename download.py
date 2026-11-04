@@ -45,8 +45,8 @@ if download_process.returncode != 0:
 
 print("✅ Video downloaded successfully.")
 
-# 2. PRE-RENDER VERTICAL VIDEO (The new part you wanted)
-print("⏳ Pre-rendering vertical video...")
+# 2. PRE-RENDER VERTICAL VIDEO (FAST MODE)
+print("⏳ Pre-rendering vertical video (Fast Mode)...")
 GAME_W, GAME_H, GAME_X, GAME_Y = 1420, 920, 0, 45
 CAM_W, CAM_H, CAM_X, CAM_Y = 360, 320, 1550, 650
 
@@ -58,12 +58,15 @@ filter_complex = (
     "[bg_cam][game]overlay=0:950[out]"
 )
 
-# Added -fflags +genpts to fix any broken timestamps during rendering
+# FASTER SETTINGS FOR VERTICAL ONLY
 subprocess.run([
     "ffmpeg", "-y", "-fflags", "+genpts", "-i", "video.mp4",
     "-filter_complex", filter_complex,
     "-map", "[out]", "-map", "0:a",
-    "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "6M", "-maxrate", "6M", "-bufsize", "12M",
+    "-c:v", "libx264", 
+    "-preset", "veryfast",     # Faster CPU encoding
+    "-b:v", "4M", "-maxrate", "4M", "-bufsize", "8M", # Lower bitrate
+    "-threads", "4",           # Force 4 CPU threads
     "-c:a", "aac", "-b:a", "192k",
     "vertical_render.mp4"
 ], check=True)
