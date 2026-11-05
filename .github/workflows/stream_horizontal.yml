@@ -14,20 +14,33 @@ jobs:
     permissions:
       actions: read
       contents: read
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
 
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Download Video
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+
+      - name: Download Horizontal Video
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           RUN_ID=$(gh run list --workflow=download.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
-          gh run download $RUN_ID -n downloaded-video
+          gh run download $RUN_ID -n horizontal-video
 
-      - name: Stream Horizontal
+      - name: Run Stream Horizontal
         env:
           YOUTUBE_STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
