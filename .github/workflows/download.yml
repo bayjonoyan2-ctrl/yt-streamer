@@ -63,6 +63,7 @@ jobs:
           [bg_cam][game]overlay=0:640[out]" \
           -map "[out]" -map "0:a" \
           -c:v libx264 -preset ultrafast -tune fastdecode -b:v 3M -maxrate 3M -bufsize 6M \
+          -g 50 -keyint_min 50 -sc_threshold 0 \
           -c:a aac -b:a 128k -shortest vertical_render.mp4
 
       - name: 6. Write Schedules
