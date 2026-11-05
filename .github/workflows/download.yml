@@ -39,7 +39,6 @@ jobs:
           VOD_URL: ${{ github.event.inputs.video_url }}
           PROXY_URL: ${{ secrets.PROXY_URL }}
         run: |
-          # We run a specific part of the python script to just download
           python -c "
           import os, subprocess, sys, re
           VOD_URL = os.environ.get('VOD_URL')
@@ -54,17 +53,17 @@ jobs:
           subprocess.run(['yt-dlp', '--add-header', 'Referer:https://v.huya.com/', '--add-header', 'User-Agent:Mozilla/5.0', '--extractor-args', f'generic:proxy={PROXY_URL}', '-N', '8', '-c', '--fixup', 'force', '--retries', 'infinite', '--fragment-retries', 'infinite', '-o', 'video.mp4', m3u8_url])
           "
 
-      - name: 5. Render Vertical Video
+      - name: 5. Render Vertical Video (720x1280 ULTRA FAST)
         run: |
           ffmpeg -y -fflags +genpts -i video.mp4 -loop 1 -i bg.png \
-          -filter_complex "[1:v]scale=1080:1920[bg]; \
-          [0:v]crop=1420:920:0:45,scale=1080:-2[game]; \
-          [0:v]crop=360:320:1550:650,scale=800:-2[cam]; \
-          [bg][cam]overlay=(W-w)/2:150[bg_cam]; \
-          [bg_cam][game]overlay=0:950[out]" \
+          -filter_complex "[1:v]scale=720:1280[bg]; \
+          [0:v]crop=1420:920:0:45,scale=720:-2[game]; \
+          [0:v]crop=360:320:1550:650,scale=540:-2[cam]; \
+          [bg][cam]overlay=(W-w)/2:100[bg_cam]; \
+          [bg_cam][game]overlay=0:640[out]" \
           -map "[out]" -map "0:a" \
-          -c:v libx264 -preset veryfast -b:v 4M -maxrate 4M -bufsize 8M -threads 4 \
-          -c:a aac -b:a 192k -shortest vertical_render.mp4
+          -c:v libx264 -preset ultrafast -tune fastdecode -b:v 3M -maxrate 3M -bufsize 6M \
+          -c:a aac -b:a 128k -shortest vertical_render.mp4
 
       - name: 6. Write Schedules
         env:
@@ -89,7 +88,7 @@ jobs:
           git commit -m "Update stream schedules" || true
           git push || true
 
-      - name: 8. Upload Artifacts
+      - name: 8. Upload BOTH Videos to Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: downloaded-video
