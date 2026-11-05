@@ -88,11 +88,16 @@ jobs:
           git commit -m "Update stream schedules" || true
           git push || true
 
-      - name: 8. Upload BOTH Videos to Artifacts
+      - name: 8. Upload Horizontal Video to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: downloaded-video
-          path: |
-            video.mp4
-            vertical_render.mp4
+          name: horizontal-video
+          path: video.mp4
+          retention-days: 3
+
+      - name: 9. Upload Vertical Video to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vertical-video
+          path: vertical_render.mp4
           retention-days: 3
