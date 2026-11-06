@@ -39,6 +39,13 @@ jobs:
         run: |
           RUN_ID=$(gh run list --workflow=download.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
           gh run download $RUN_ID -n vertical-video
+          
+      - name: Ensure Correct Filename
+        run: |
+          # Find the mp4 file and rename it to what the script expects
+          if [ -f "video.mp4" ]; then
+            mv video.mp4 vertical_render.mp4
+          fi
 
       - name: Run Stream Vertical
         env:
