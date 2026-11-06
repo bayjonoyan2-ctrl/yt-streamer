@@ -6,13 +6,18 @@ import sys
 import urllib.request
 import json
 
-INPUT_FILE = "vertical_render.mp4" # Use the pre-rendered file!
+INPUT_FILE = "vertical_render.mp4"
 YOUTUBE_STREAM_KEY_VERTICAL = os.environ.get("YOUTUBE_STREAM_KEY_VERTICAL")
 GH_TOKEN = os.environ.get("GH_TOKEN")
 REPO = os.environ.get("REPO", "")
 START_OFFSET = os.environ.get("START_OFFSET", "0")
 
 if not YOUTUBE_STREAM_KEY_VERTICAL or not GH_TOKEN:
+    print("❌ Missing YOUTUBE_STREAM_KEY_VERTICAL or GH_TOKEN")
+    sys.exit(1)
+
+if not os.path.exists(INPUT_FILE):
+    print(f"❌ ERROR: {INPUT_FILE} not found in the directory!")
     sys.exit(1)
 
 RTMP_URL = f"rtmp://a.rtmp.youtube.com/live2/{YOUTUBE_STREAM_KEY_VERTICAL}"
@@ -39,7 +44,9 @@ def trigger_next(start_offset):
 
 def stream():
     total_duration = get_duration(INPUT_FILE)
-    if total_duration == 0: return
+    if total_duration == 0:
+        print("❌ Could not read video duration.")
+        return
 
     seek_offset = float(START_OFFSET)
     if seek_offset > 0:
