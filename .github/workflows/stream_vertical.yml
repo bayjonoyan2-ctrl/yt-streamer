@@ -39,17 +39,10 @@ jobs:
         run: |
           RUN_ID=$(gh run list --workflow=download.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
           gh run download $RUN_ID -n vertical-video
-          
-      - name: Ensure Correct Filename
-        run: |
-          # Find the mp4 file and rename it to what the script expects
-          if [ -f "video.mp4" ]; then
-            mv video.mp4 vertical_render.mp4
-          fi
 
       - name: Run Stream Vertical
         env:
-          YOUTUBE_STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY_VERTICAL }}
+          YOUTUBE_STREAM_KEY_VERTICAL: ${{ secrets.YOUTUBE_STREAM_KEY_VERTICAL }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           REPO: ${{ github.repository }}
           START_OFFSET: ${{ github.event.inputs.start_offset }}
