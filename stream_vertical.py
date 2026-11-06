@@ -20,7 +20,9 @@ if not os.path.exists(INPUT_FILE):
     print(f"❌ ERROR: {INPUT_FILE} not found in the directory!")
     sys.exit(1)
 
-RTMP_URL = f"rtmp://a.rtmp.youtube.com/live2/{YOUTUBE_STREAM_KEY_VERTICAL}"
+# FIXED: Using the Backup URL to prevent ingestion conflict with the Horizontal stream
+RTMP_URL = f"rtmp://b.rtmp.youtube.com/live2?backup=1/{YOUTUBE_STREAM_KEY_VERTICAL}"
+
 TRIGGER_AT_SECONDS = 3 * 3600
 HANDOVER_AT_SECONDS = 3 * 3600 + 30 * 60
 
